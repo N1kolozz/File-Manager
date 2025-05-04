@@ -1,7 +1,7 @@
 import os from 'os';
 import path from 'path';
+import fs from 'fs/promises';
 import readline from 'readline';
-import { fileURLToPath } from 'url';
 
 
 const args = process.argv.slice(2);
@@ -25,6 +25,37 @@ printCurrentDirectory();
 rl.prompt();
 
 
+rl.on('line', async (input) => {
+  const trimmedInput = input.trim();
+  const [command, ...args] = trimmedInput.split(' ');
+
+  try {
+    switch (command) {
+      case 'up':
+        handleUp();
+        break;
+      case 'cd':
+        await handleCd(args[0]);
+        break;
+      case 'ls':
+        await handleLs();
+        break;
+      case '.exit':
+        exitProgram();
+        return;
+      default:
+        console.log('Invalid input');
+    }
+  } catch {
+    console.log('Operation failed');
+  }
+
+  printCurrentDirectory();
+  rl.prompt();
+});
+
+
+rl.on('SIGINT', exitProgram);
 
 
 function printCurrentDirectory() {
@@ -32,23 +63,58 @@ function printCurrentDirectory() {
 }
 
 
-rl.on('line', (input) => {
-  const trimmedInput = input.trim();
-
-  if (trimmedInput === '.exit') {
-    exitProgram();
-  } else {
-
-    console.log('Invalid input'); 
-    printCurrentDirectory();
-    rl.prompt();
-  }
-});
-
 function exitProgram() {
   console.log(`Thank you for using File Manager, ${username}, goodbye!`);
   process.exit(0);
 }
 
 
-rl.on('SIGINT', exitProgram);
+function handleUp() {
+  const parentDir = path.dirname(currentDir);
+  const root = path.parse(currentDir).root;
+
+  if (currentDir !== root) {
+    currentDir = parentDir;
+  }
+}
+
+
+async function handleCd(targetPath) {
+  const fullPath = path.isAbsolute(targetPath)
+    ? targetPath
+    : path.join(currentDir, targetPath);
+
+  try {
+    const stat = await fs.stat(fullPath);
+    if (stat.isDirectory()) {
+      currentDir = fullPath;
+    } else {
+      console.log('Operation failed');
+    }
+  } catch {
+    console.log('Operation failed');
+  }
+}
+
+
+async function handleLs() {
+  try {
+    const files = await fs.readdir(currentDir, { withFileTypes: true });
+
+    const folders = files
+      .filter(dirent => dirent.isDirectory())
+      .map(dirent => ({ Name: dirent.name, Type: 'directory' }));
+
+    const regularFiles = files
+      .filter(dirent => dirent.isFile())
+      .map(dirent => ({ Name: dirent.name, Type: 'file' }));
+
+    const result = [...folders, ...regularFiles].sort((a, b) =>
+      a.Name.localeCompare(b.Name)
+    );
+
+    console.table(result);
+  } catch {
+    console.log('Operation failed');
+  }
+}
