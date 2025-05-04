@@ -4,6 +4,8 @@ import fs from 'fs/promises';
 import fsSync from 'fs';
 import readline from 'readline';
 import crypto from 'crypto';
+import { createBrotliCompress, createBrotliDecompress } from 'zlib';
+
 
 
 const args = process.argv.slice(2);
@@ -14,9 +16,9 @@ const homeDir = os.homedir();
 let currentDir = homeDir;
 
 const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout,
-  prompt: '> '
+    input: process.stdin,
+    output: process.stdout,
+    prompt: '> '
 });
 
 console.log(`Welcome to the File Manager, ${username}!`);
@@ -24,304 +26,366 @@ printCurrentDirectory();
 rl.prompt();
 
 rl.on('line', async (input) => {
-  const trimmedInput = input.trim();
-  const [command, ...args] = trimmedInput.split(' ');
+    const trimmedInput = input.trim();
+    const [command, ...args] = trimmedInput.split(' ');
 
-  try {
-    switch (command) {
-      case 'up':
-        handleUp();
-        break;
-      case 'cd':
-        await handleCd(args[0]);
-        break;
-      case 'ls':
-        await handleLs();
-        break;
-      case 'cat':
-        await handleCat(args[0]);
-        break;
-      case 'add':
-        await handleAdd(args[0]);
-        break;
-      case 'rm':
-        await handleRm(args[0]);
-        break;
-      case 'rn':
-        await handleRename(args[0], args[1]);
-        break;
-      case 'cp':
-        await handleCopy(args[0], args[1]);
-        break;
-      case 'mv':
-        await handleMove(args[0], args[1]);
-        break;
-      case 'mkdir':
-        await handleMkdir(args[0]);
-        break;
-      case 'os':
-        await handleOs(args[0]);
-        break;
-        case 'hash':
-  await handleHash(args[0]);
-  break;
-      case '.exit':
-        exitProgram();
-        return;
-      default:
-        console.log('Invalid input');
+    try {
+        switch (command) {
+            case 'up':
+                handleUp();
+                break;
+            case 'cd':
+                await handleCd(args[0]);
+                break;
+            case 'ls':
+                await handleLs();
+                break;
+            case 'cat':
+                await handleCat(args[0]);
+                break;
+            case 'add':
+                await handleAdd(args[0]);
+                break;
+            case 'rm':
+                await handleRm(args[0]);
+                break;
+            case 'rn':
+                await handleRename(args[0], args[1]);
+                break;
+            case 'cp':
+                await handleCopy(args[0], args[1]);
+                break;
+            case 'mv':
+                await handleMove(args[0], args[1]);
+                break;
+            case 'mkdir':
+                await handleMkdir(args[0]);
+                break;
+            case 'os':
+                await handleOs(args[0]);
+                break;
+            case 'hash':
+                await handleHash(args[0]);
+                break;
+            case 'compress':
+                await handleCompress(args[0], args[1]);
+                break;
+            case 'decompress':
+                await handleDecompress(args[0], args[1]);
+                break;
+
+            case '.exit':
+                exitProgram();
+                return;
+            default:
+                console.log('Invalid input');
+        }
+    } catch {
+        console.log('Operation failed');
     }
-  } catch {
-    console.log('Operation failed');
-  }
 
-  printCurrentDirectory();
-  rl.prompt();
+    printCurrentDirectory();
+    rl.prompt();
 });
 
 rl.on('SIGINT', exitProgram);
 
 function printCurrentDirectory() {
-  console.log(`You are currently in ${currentDir}`);
+    console.log(`You are currently in ${currentDir}`);
 }
 
 function exitProgram() {
-  console.log(`Thank you for using File Manager, ${username}, goodbye!`);
-  process.exit(0);
+    console.log(`Thank you for using File Manager, ${username}, goodbye!`);
+    process.exit(0);
 }
 
 function handleUp() {
-  const parentDir = path.dirname(currentDir);
-  const root = path.parse(currentDir).root;
+    const parentDir = path.dirname(currentDir);
+    const root = path.parse(currentDir).root;
 
-  if (currentDir !== root) {
-    currentDir = parentDir;
-  }
+    if (currentDir !== root) {
+        currentDir = parentDir;
+    }
 }
 
 async function handleCd(targetPath) {
-  const fullPath = path.isAbsolute(targetPath)
-    ? targetPath
-    : path.join(currentDir, targetPath);
+    const fullPath = path.isAbsolute(targetPath)
+        ? targetPath
+        : path.join(currentDir, targetPath);
 
-  try {
-    const stat = await fs.stat(fullPath);
-    if (stat.isDirectory()) {
-      currentDir = fullPath;
-    } else {
-      console.log('Operation failed');
+    try {
+        const stat = await fs.stat(fullPath);
+        if (stat.isDirectory()) {
+            currentDir = fullPath;
+        } else {
+            console.log('Operation failed');
+        }
+    } catch {
+        console.log('Operation failed');
     }
-  } catch {
-    console.log('Operation failed');
-  }
 }
 
 async function handleLs() {
-  try {
-    const files = await fs.readdir(currentDir, { withFileTypes: true });
+    try {
+        const files = await fs.readdir(currentDir, { withFileTypes: true });
 
-    const folders = files
-      .filter(dirent => dirent.isDirectory())
-      .map(dirent => ({ Name: dirent.name, Type: 'directory' }));
+        const folders = files
+            .filter(dirent => dirent.isDirectory())
+            .map(dirent => ({ Name: dirent.name, Type: 'directory' }));
 
-    const regularFiles = files
-      .filter(dirent => dirent.isFile())
-      .map(dirent => ({ Name: dirent.name, Type: 'file' }));
+        const regularFiles = files
+            .filter(dirent => dirent.isFile())
+            .map(dirent => ({ Name: dirent.name, Type: 'file' }));
 
-    const result = [...folders, ...regularFiles].sort((a, b) =>
-      a.Name.localeCompare(b.Name)
-    );
+        const result = [...folders, ...regularFiles].sort((a, b) =>
+            a.Name.localeCompare(b.Name)
+        );
 
-    console.table(result);
-  } catch {
-    console.log('Operation failed');
-  }
+        console.table(result);
+    } catch {
+        console.log('Operation failed');
+    }
 }
 
 async function handleCat(filePath) {
-  const fullPath = path.isAbsolute(filePath)
-    ? filePath
-    : path.join(currentDir, filePath);
+    const fullPath = path.isAbsolute(filePath)
+        ? filePath
+        : path.join(currentDir, filePath);
 
-  const readable = fsSync.createReadStream(fullPath, 'utf-8');
+    const readable = fsSync.createReadStream(fullPath, 'utf-8');
 
-  readable.on('data', chunk => {
-    process.stdout.write(chunk);
-  });
+    readable.on('data', chunk => {
+        process.stdout.write(chunk);
+    });
 
-  readable.on('error', () => {
-    console.log('Operation failed');
-  });
+    readable.on('error', () => {
+        console.log('Operation failed');
+    });
 
-  return new Promise(resolve => {
-    readable.on('end', resolve);
-  });
+    return new Promise(resolve => {
+        readable.on('end', resolve);
+    });
 }
 
 async function handleAdd(filename) {
-  if (!filename) {
-    console.log('Invalid input');
-    return;
-  }
+    if (!filename) {
+        console.log('Invalid input');
+        return;
+    }
 
-  const fullPath = path.join(currentDir, filename);
+    const fullPath = path.join(currentDir, filename);
 
-  try {
-    await fs.writeFile(fullPath, '');
-  } catch {
-    console.log('Operation failed');
-  }
+    try {
+        await fs.writeFile(fullPath, '');
+    } catch {
+        console.log('Operation failed');
+    }
 }
 
 async function handleRm(filePath) {
-  const fullPath = path.isAbsolute(filePath)
-    ? filePath
-    : path.join(currentDir, filePath);
+    const fullPath = path.isAbsolute(filePath)
+        ? filePath
+        : path.join(currentDir, filePath);
 
-  try {
-    await fs.unlink(fullPath);
-  } catch {
-    console.log('Operation failed');
-  }
+    try {
+        await fs.unlink(fullPath);
+    } catch {
+        console.log('Operation failed');
+    }
 }
 
 async function handleRename(oldPath, newName) {
-  if (!oldPath || !newName) {
-    console.log('Invalid input');
-    return;
-  }
+    if (!oldPath || !newName) {
+        console.log('Invalid input');
+        return;
+    }
 
-  const fullOldPath = path.isAbsolute(oldPath)
-    ? oldPath
-    : path.join(currentDir, oldPath);
+    const fullOldPath = path.isAbsolute(oldPath)
+        ? oldPath
+        : path.join(currentDir, oldPath);
 
-  const newFullPath = path.join(path.dirname(fullOldPath), newName);
+    const newFullPath = path.join(path.dirname(fullOldPath), newName);
 
-  try {
-    await fs.rename(fullOldPath, newFullPath);
-  } catch {
-    console.log('Operation failed');
-  }
+    try {
+        await fs.rename(fullOldPath, newFullPath);
+    } catch {
+        console.log('Operation failed');
+    }
 }
 
 async function handleCopy(srcPath, destDir) {
-  if (!srcPath || !destDir) {
-    console.log('Invalid input');
-    return;
-  }
+    if (!srcPath || !destDir) {
+        console.log('Invalid input');
+        return;
+    }
 
-  const fullSrcPath = path.isAbsolute(srcPath)
-    ? srcPath
-    : path.join(currentDir, srcPath);
+    const fullSrcPath = path.isAbsolute(srcPath)
+        ? srcPath
+        : path.join(currentDir, srcPath);
 
-  const fullDestDir = path.isAbsolute(destDir)
-    ? destDir
-    : path.join(currentDir, destDir);
+    const fullDestDir = path.isAbsolute(destDir)
+        ? destDir
+        : path.join(currentDir, destDir);
 
-  const fileName = path.basename(fullSrcPath);
-  const destFilePath = path.join(fullDestDir, fileName);
+    const fileName = path.basename(fullSrcPath);
+    const destFilePath = path.join(fullDestDir, fileName);
 
-  try {
-    await fs.access(fullSrcPath);
-    await fs.access(fullDestDir);
+    try {
+        await fs.access(fullSrcPath);
+        await fs.access(fullDestDir);
 
-    const readable = fsSync.createReadStream(fullSrcPath);
-    const writable = fsSync.createWriteStream(destFilePath);
+        const readable = fsSync.createReadStream(fullSrcPath);
+        const writable = fsSync.createWriteStream(destFilePath);
 
-    readable.pipe(writable);
+        readable.pipe(writable);
 
-    return new Promise((resolve, reject) => {
-      readable.on('error', () => {
+        return new Promise((resolve, reject) => {
+            readable.on('error', () => {
+                console.log('Operation failed');
+                reject();
+            });
+            writable.on('finish', resolve);
+        });
+    } catch {
         console.log('Operation failed');
-        reject();
-      });
-      writable.on('finish', resolve);
-    });
-  } catch {
-    console.log('Operation failed');
-  }
+    }
 }
 
 async function handleMove(srcPath, destDir) {
-  await handleCopy(srcPath, destDir);
+    await handleCopy(srcPath, destDir);
 
-  const fullSrcPath = path.isAbsolute(srcPath)
-    ? srcPath
-    : path.join(currentDir, srcPath);
+    const fullSrcPath = path.isAbsolute(srcPath)
+        ? srcPath
+        : path.join(currentDir, srcPath);
 
-  try {
-    await fs.unlink(fullSrcPath);
-  } catch {
-    console.log('Operation failed');
-  }
+    try {
+        await fs.unlink(fullSrcPath);
+    } catch {
+        console.log('Operation failed');
+    }
 }
 
 async function handleMkdir(dirName) {
-  if (!dirName) {
-    console.log('Invalid input');
-    return;
-  }
+    if (!dirName) {
+        console.log('Invalid input');
+        return;
+    }
 
-  const fullPath = path.join(currentDir, dirName);
+    const fullPath = path.join(currentDir, dirName);
 
-  try {
-    await fs.mkdir(fullPath);
-  } catch {
-    console.log('Operation failed');
-  }
+    try {
+        await fs.mkdir(fullPath);
+    } catch {
+        console.log('Operation failed');
+    }
 }
 
 async function handleOs(option) {
-  switch (option) {
-    case '--EOL':
-      console.log(JSON.stringify(os.EOL));
-      break;
-    case '--cpus': {
-      const cpus = os.cpus();
-      console.log(`Total CPUs: ${cpus.length}`);
-      cpus.forEach((cpu, index) => {
-        console.log(
-          `CPU ${index + 1}: ${cpu.model}, ${Math.round(cpu.speed / 100) / 10} GHz`
-        );
-      });
-      break;
+    switch (option) {
+        case '--EOL':
+            console.log(JSON.stringify(os.EOL));
+            break;
+        case '--cpus': {
+            const cpus = os.cpus();
+            console.log(`Total CPUs: ${cpus.length}`);
+            cpus.forEach((cpu, index) => {
+                console.log(
+                    `CPU ${index + 1}: ${cpu.model}, ${Math.round(cpu.speed / 100) / 10} GHz`
+                );
+            });
+            break;
+        }
+        case '--homedir':
+            console.log(os.homedir());
+            break;
+        case '--username':
+            console.log(os.userInfo().username);
+            break;
+        case '--architecture':
+            console.log(process.arch);
+            break;
+        default:
+            console.log('Invalid input');
     }
-    case '--homedir':
-      console.log(os.homedir());
-      break;
-    case '--username':
-      console.log(os.userInfo().username);
-      break;
-    case '--architecture':
-      console.log(process.arch);
-      break;
-    default:
-      console.log('Invalid input');
-  }
 }
 
 async function handleHash(filePath) {
     const fullPath = path.isAbsolute(filePath)
-      ? filePath
-      : path.join(currentDir, filePath);
-  
+        ? filePath
+        : path.join(currentDir, filePath);
+
     try {
-      const readable = fsSync.createReadStream(fullPath);
-      const hash = crypto.createHash('sha256');
-  
-      readable.on('error', () => {
-        console.log('Operation failed');
-      });
-  
-      readable.on('data', (chunk) => {
-        hash.update(chunk);
-      });
-  
-      readable.on('end', () => {
-        console.log(hash.digest('hex'));
-      });
+        const readable = fsSync.createReadStream(fullPath);
+        const hash = crypto.createHash('sha256');
+
+        readable.on('error', () => {
+            console.log('Operation failed');
+        });
+
+        readable.on('data', (chunk) => {
+            hash.update(chunk);
+        });
+
+        readable.on('end', () => {
+            console.log(hash.digest('hex'));
+        });
     } catch {
-      console.log('Operation failed');
+        console.log('Operation failed');
     }
-  }
-  
+}
+
+async function handleCompress(srcPath, destPath) {
+    const fullSrcPath = path.isAbsolute(srcPath)
+        ? srcPath
+        : path.join(currentDir, srcPath);
+
+    const fullDestPath = path.isAbsolute(destPath)
+        ? destPath
+        : path.join(currentDir, destPath);
+
+    try {
+        const readable = fsSync.createReadStream(fullSrcPath);
+        const writable = fsSync.createWriteStream(fullDestPath);
+        const brotli = createBrotliCompress();
+
+        readable.pipe(brotli).pipe(writable);
+
+        return new Promise((resolve, reject) => {
+            readable.on('error', () => {
+                console.log('Operation failed');
+                reject();
+            });
+            writable.on('finish', resolve);
+        });
+    } catch {
+        console.log('Operation failed');
+    }
+}
+
+async function handleDecompress(srcPath, destPath) {
+    const fullSrcPath = path.isAbsolute(srcPath)
+        ? srcPath
+        : path.join(currentDir, srcPath);
+
+    const fullDestPath = path.isAbsolute(destPath)
+        ? destPath
+        : path.join(currentDir, destPath);
+
+    try {
+        const readable = fsSync.createReadStream(fullSrcPath);
+        const writable = fsSync.createWriteStream(fullDestPath);
+        const brotli = createBrotliDecompress();
+
+        readable.pipe(brotli).pipe(writable);
+
+        return new Promise((resolve, reject) => {
+            readable.on('error', () => {
+                console.log('Operation failed');
+                reject();
+            });
+            writable.on('finish', resolve);
+        });
+    } catch {
+        console.log('Operation failed');
+    }
+}
