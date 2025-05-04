@@ -1,18 +1,15 @@
 import os from 'os';
 import path from 'path';
 import fs from 'fs/promises';
-import fsSync from 'fs'; // For stream operations
+import fsSync from 'fs';
 import readline from 'readline';
-
 
 const args = process.argv.slice(2);
 const usernameArg = args.find(arg => arg.startsWith('--username='));
 const username = usernameArg ? usernameArg.split('=')[1] : 'Anonymous';
 
-
 const homeDir = os.homedir();
 let currentDir = homeDir;
-
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -20,11 +17,9 @@ const rl = readline.createInterface({
   prompt: '> '
 });
 
-
 console.log(`Welcome to the File Manager, ${username}!`);
 printCurrentDirectory();
 rl.prompt();
-
 
 rl.on('line', async (input) => {
   const trimmedInput = input.trim();
@@ -50,6 +45,15 @@ rl.on('line', async (input) => {
       case 'rm':
         await handleRm(args[0]);
         break;
+      case 'rn':
+        await handleRename(args[0], args[1]);
+        break;
+      case 'cp':
+        await handleCopy(args[0], args[1]);
+        break;
+      case 'mv':
+        await handleMove(args[0], args[1]);
+        break;
       case '.exit':
         exitProgram();
         return;
@@ -64,20 +68,16 @@ rl.on('line', async (input) => {
   rl.prompt();
 });
 
-
 rl.on('SIGINT', exitProgram);
-
 
 function printCurrentDirectory() {
   console.log(`You are currently in ${currentDir}`);
 }
 
-
 function exitProgram() {
   console.log(`Thank you for using File Manager, ${username}, goodbye!`);
   process.exit(0);
 }
-
 
 function handleUp() {
   const parentDir = path.dirname(currentDir);
@@ -105,7 +105,6 @@ async function handleCd(targetPath) {
   }
 }
 
-
 async function handleLs() {
   try {
     const files = await fs.readdir(currentDir, { withFileTypes: true });
@@ -128,7 +127,6 @@ async function handleLs() {
   }
 }
 
-
 async function handleCat(filePath) {
   const fullPath = path.isAbsolute(filePath)
     ? filePath
@@ -149,7 +147,6 @@ async function handleCat(filePath) {
   });
 }
 
-
 async function handleAdd(filename) {
   if (!filename) {
     console.log('Invalid input');
@@ -165,7 +162,6 @@ async function handleAdd(filename) {
   }
 }
 
-
 async function handleRm(filePath) {
   const fullPath = path.isAbsolute(filePath)
     ? filePath
@@ -173,6 +169,77 @@ async function handleRm(filePath) {
 
   try {
     await fs.unlink(fullPath);
+  } catch {
+    console.log('Operation failed');
+  }
+}
+
+async function handleRename(oldPath, newName) {
+  if (!oldPath || !newName) {
+    console.log('Invalid input');
+    return;
+  }
+
+  const fullOldPath = path.isAbsolute(oldPath)
+    ? oldPath
+    : path.join(currentDir, oldPath);
+
+  const newFullPath = path.join(path.dirname(fullOldPath), newName);
+
+  try {
+    await fs.rename(fullOldPath, newFullPath);
+  } catch {
+    console.log('Operation failed');
+  }
+}
+
+async function handleCopy(srcPath, destDir) {
+  if (!srcPath || !destDir) {
+    console.log('Invalid input');
+    return;
+  }
+
+  const fullSrcPath = path.isAbsolute(srcPath)
+    ? srcPath
+    : path.join(currentDir, srcPath);
+
+  const fullDestDir = path.isAbsolute(destDir)
+    ? destDir
+    : path.join(currentDir, destDir);
+
+  const fileName = path.basename(fullSrcPath);
+  const destFilePath = path.join(fullDestDir, fileName);
+
+  try {
+    await fs.access(fullSrcPath);
+    await fs.access(fullDestDir);
+
+    const readable = fsSync.createReadStream(fullSrcPath);
+    const writable = fsSync.createWriteStream(destFilePath);
+
+    readable.pipe(writable);
+
+    return new Promise((resolve, reject) => {
+      readable.on('error', () => {
+        console.log('Operation failed');
+        reject();
+      });
+      writable.on('finish', resolve);
+    });
+  } catch {
+    console.log('Operation failed');
+  }
+}
+
+async function handleMove(srcPath, destDir) {
+  await handleCopy(srcPath, destDir);
+
+  const fullSrcPath = path.isAbsolute(srcPath)
+    ? srcPath
+    : path.join(currentDir, srcPath);
+
+  try {
+    await fs.unlink(fullSrcPath);
   } catch {
     console.log('Operation failed');
   }
