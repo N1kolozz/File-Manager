@@ -3,6 +3,8 @@ import path from 'path';
 import fs from 'fs/promises';
 import fsSync from 'fs';
 import readline from 'readline';
+import crypto from 'crypto';
+
 
 const args = process.argv.slice(2);
 const usernameArg = args.find(arg => arg.startsWith('--username='));
@@ -60,6 +62,9 @@ rl.on('line', async (input) => {
       case 'os':
         await handleOs(args[0]);
         break;
+        case 'hash':
+  await handleHash(args[0]);
+  break;
       case '.exit':
         exitProgram();
         return;
@@ -294,3 +299,29 @@ async function handleOs(option) {
       console.log('Invalid input');
   }
 }
+
+async function handleHash(filePath) {
+    const fullPath = path.isAbsolute(filePath)
+      ? filePath
+      : path.join(currentDir, filePath);
+  
+    try {
+      const readable = fsSync.createReadStream(fullPath);
+      const hash = crypto.createHash('sha256');
+  
+      readable.on('error', () => {
+        console.log('Operation failed');
+      });
+  
+      readable.on('data', (chunk) => {
+        hash.update(chunk);
+      });
+  
+      readable.on('end', () => {
+        console.log(hash.digest('hex'));
+      });
+    } catch {
+      console.log('Operation failed');
+    }
+  }
+  
