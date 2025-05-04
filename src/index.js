@@ -1,6 +1,7 @@
 import os from 'os';
 import path from 'path';
 import fs from 'fs/promises';
+import fsSync from 'fs'; // For stream operations
 import readline from 'readline';
 
 
@@ -40,6 +41,15 @@ rl.on('line', async (input) => {
       case 'ls':
         await handleLs();
         break;
+      case 'cat':
+        await handleCat(args[0]);
+        break;
+      case 'add':
+        await handleAdd(args[0]);
+        break;
+      case 'rm':
+        await handleRm(args[0]);
+        break;
       case '.exit':
         exitProgram();
         return;
@@ -78,7 +88,6 @@ function handleUp() {
   }
 }
 
-
 async function handleCd(targetPath) {
   const fullPath = path.isAbsolute(targetPath)
     ? targetPath
@@ -114,6 +123,56 @@ async function handleLs() {
     );
 
     console.table(result);
+  } catch {
+    console.log('Operation failed');
+  }
+}
+
+
+async function handleCat(filePath) {
+  const fullPath = path.isAbsolute(filePath)
+    ? filePath
+    : path.join(currentDir, filePath);
+
+  const readable = fsSync.createReadStream(fullPath, 'utf-8');
+
+  readable.on('data', chunk => {
+    process.stdout.write(chunk);
+  });
+
+  readable.on('error', () => {
+    console.log('Operation failed');
+  });
+
+  return new Promise(resolve => {
+    readable.on('end', resolve);
+  });
+}
+
+
+async function handleAdd(filename) {
+  if (!filename) {
+    console.log('Invalid input');
+    return;
+  }
+
+  const fullPath = path.join(currentDir, filename);
+
+  try {
+    await fs.writeFile(fullPath, '');
+  } catch {
+    console.log('Operation failed');
+  }
+}
+
+
+async function handleRm(filePath) {
+  const fullPath = path.isAbsolute(filePath)
+    ? filePath
+    : path.join(currentDir, filePath);
+
+  try {
+    await fs.unlink(fullPath);
   } catch {
     console.log('Operation failed');
   }
